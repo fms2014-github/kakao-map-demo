@@ -1,15 +1,16 @@
 <template>
-  <div class="cluster">
-    <div class="map-cluster" @click="clusterClick()">
+  <div ref="cluster" class="cluster" @click.stop="onClusterClick()">
+    <div class="map-cluster">
       <span class="count">{{ count }}</span>
     </div>
-    <div ref="mcListBox" v-if="this.openMcList" class="mc-list">
+    <div ref="mcListBox" v-if="openMcList" class="mc-list">
       <div
         ref="listItem"
         class="mc-item"
         :class="selectedMarker(data)"
         v-for="data in dataSet"
         :key="data.mc.id"
+        @click.stop="onClusterInMcItemClick(data.mc.id)"
       >
         {{ data.mc.place_name }}
       </div>
@@ -17,30 +18,23 @@
   </div>
 </template>
 <script lang="ts">
-import { Component, Prop, Vue, Ref, Watch } from "vue-property-decorator";
+import { Component, Prop, Vue, Ref, Watch, Emit } from "vue-property-decorator";
 @Component
 export default class MapCluster extends Vue {
   @Prop() readonly markers!: any[];
   @Prop() readonly mcList!: any[];
+  @Prop() readonly openMcList!: boolean;
   @Ref("listItem") readonly listItem!: HTMLElement[];
   @Ref("mcListBox") readonly mcListBox!: HTMLElement;
+  @Ref("cluster") readonly cluster!: HTMLElement;
 
   count = 0;
-  openMcList = false;
+
   dataSet: any[] = [];
-  @Watch("openMcList", { immediate: true, deep: true })
+  @Watch("openMcList")
   async onOpenMcList(newVal: any, oldVal: any) {
     await this.$nextTick(() => {
-      if (newVal) {
-        const fIdx = this.markers.findIndex((marker) => {
-          const content = marker.getContent() as HTMLElement;
-          return content.classList.contains("act");
-        });
-
-        if (fIdx !== -1) {
-          this.mcListBox.scrollTo(0, this.listItem[fIdx].offsetTop);
-        }
-      }
+      this.changeEvent(newVal);
     });
   }
 
@@ -53,8 +47,14 @@ export default class MapCluster extends Vue {
     });
   }
 
-  clusterClick() {
-    this.openMcList = !this.openMcList;
+  @Emit("onClusterClick")
+  onClusterClick() {
+    return this.openMcList;
+  }
+
+  @Emit("onClusterInMcItemClick")
+  onClusterInMcItemClick(id: string) {
+    return id;
   }
 
   selectedMarker(data: any) {
@@ -63,6 +63,27 @@ export default class MapCluster extends Vue {
     return {
       selected: isAct,
     };
+  }
+
+  selectedTracking() {
+    const fIdx = this.markers.findIndex((marker) => {
+      const content = marker.getContent() as HTMLElement;
+      return content.classList.contains("act");
+    });
+
+    if (fIdx !== -1) {
+      this.mcListBox.scrollTo(0, this.listItem[fIdx].offsetTop);
+    }
+  }
+
+  changeEvent(status: boolean) {
+    const clusterPin = this.cluster.parentElement as HTMLElement;
+    if (status) {
+      this.selectedTracking();
+      clusterPin.style.zIndex = "10";
+    } else {
+      clusterPin.style.zIndex = "";
+    }
   }
 }
 </script>
@@ -105,6 +126,7 @@ export default class MapCluster extends Vue {
     overflow-x: hidden;
     overflow-y: scroll;
     transform: translateX(calc(-50% + 16px));
+    z-index: 1000;
     .mc-item {
       display: inline-block;
       width: calc(100% - 2px);

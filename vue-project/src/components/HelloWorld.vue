@@ -19,6 +19,10 @@ export default class KakaoMap extends Vue {
   customOverlayList: any[] = [];
   mapBounds: any = null;
   kakaoMapClusterer: any = null;
+  clursterList: any[] = [];
+  clursterComponentList: any[] = [];
+  prevSelectedIdx = -1;
+  selectedIdx = -1;
 
   async mounted() {
     await this.$nextTick(() => {
@@ -44,13 +48,13 @@ export default class KakaoMap extends Vue {
 
   kakaoMapInit() {
     let script: HTMLScriptElement = document.querySelector(
-      "script[src='//dapi.kakao.com/v2/maps/sdk.js?appkey=07c20e31d1891825ce375b67602ddf31&autoload=false&libraries=services,clusterer,drawing']"
+      "script[src='https://dapi.kakao.com/v2/maps/sdk.js?appkey=07c20e31d1891825ce375b67602ddf31&autoload=false&libraries=services,clusterer,drawing']"
     ) as HTMLScriptElement;
 
     if (script === null) {
       script = document.createElement("script");
       script.src =
-        "http://dapi.kakao.com/v2/maps/sdk.js?appkey=07c20e31d1891825ce375b67602ddf31&autoload=false&libraries=services,clusterer,drawing";
+        "https://dapi.kakao.com/v2/maps/sdk.js?appkey=07c20e31d1891825ce375b67602ddf31&autoload=false&libraries=services,clusterer,drawing";
       script.type = "text/javascript";
       script.onload = () => {
         window.kakao.maps.load(() => {
@@ -109,19 +113,33 @@ export default class KakaoMap extends Vue {
   }
 
   makeCustomOverlayList() {
-    this.searchList.forEach((element) => {
+    this.searchList.forEach((element, index) => {
       const pinComponent = new MapPin();
       pinComponent.$mount();
 
       pinComponent.$el.addEventListener("click", ($event: Event) => {
+        const mcIndex = index;
         const target = $event.target as HTMLElement;
-        if (!target.classList.contains("act")) {
-          this.customOverlayList.forEach((element) => {
-            const content = element.getContent() as HTMLElement;
-            content.classList.remove("act");
-          });
+        console.log("mcIndex", mcIndex);
+        console.log("this.selectedIdx", this.selectedIdx);
+        if (this.selectedIdx !== -1 && this.selectedIdx === mcIndex) {
+          target.classList.remove("act");
+          this.selectedIdx = -1;
+          this.prevSelectedIdx = -1;
+        } else if (this.selectedIdx !== -1) {
+          this.prevSelectedIdx = this.selectedIdx;
+          const prevTarget = this.customOverlayList[
+            this.prevSelectedIdx
+          ].getContent() as HTMLElement;
+          prevTarget.classList.remove("act");
+          target.classList.add("act");
+          this.selectedIdx = mcIndex;
+        } else {
+          target.classList.add("act");
+          this.selectedIdx = mcIndex;
         }
-        target.classList.toggle("act");
+
+        this.clursterComponentList.forEach((item) => item.$forceUpdate());
       });
 
       const customOverlay = new window.kakao.maps.CustomOverlay({
@@ -129,7 +147,6 @@ export default class KakaoMap extends Vue {
         clickable: true,
         content: pinComponent.$el,
         position: new window.kakao.maps.LatLng(element.y, element.x),
-        zIndex: 3,
       });
 
       this.customOverlayList.push(customOverlay);
@@ -144,6 +161,7 @@ export default class KakaoMap extends Vue {
       averageCenter: true,
       disableClickZoom: true,
     });
+
     window.kakao.maps.event.addListener(
       this.kakaoMapClusterer,
       "clustered",
@@ -152,12 +170,13 @@ export default class KakaoMap extends Vue {
   }
 
   onClusterer(clusters: any[]) {
-    clusters?.forEach((cluster: any) => {
-      const marksers = cluster.getMarkers() as any[];
+    this.clursterComponentList = [];
+    clusters?.forEach((cluster: any, index) => {
+      const clusterInMarksers = cluster.getMarkers() as any[];
       const mcList: any[] = [];
       const markerCluster = cluster.getClusterMarker();
 
-      marksers.forEach((clusterInMarker) => {
+      clusterInMarksers.forEach((clusterInMarker) => {
         const fIdx = this.customOverlayList.findIndex((marker) => {
           const clusterInMarkerPos = clusterInMarker.getPosition();
           const markerPos = marker.getPosition();
@@ -169,11 +188,34 @@ export default class KakaoMap extends Vue {
       });
 
       const mapCluster = new MapCluster();
-      mapCluster.$props["markers"] = marksers;
+      mapCluster.$props["markers"] = clusterInMarksers;
       mapCluster.$props["mcList"] = mcList;
+      mapCluster.$props["openMcList"] = false;
+      mapCluster.$on("onClusterClick", (data: boolean) => {
+        if (!data) {
+          this.clursterComponentList.forEach((component) => {
+            component.$props["openMcList"] = false;
+          });
+        }
+        mapCluster.$props["openMcList"] = !data;
+      });
+      mapCluster.$on("onClusterInMcItemClick", (data: string) => {
+        const fIdx = this.searchList.findIndex((item) => {
+          return item.id === data;
+        });
+        if (fIdx !== -1) {
+          this.prevSelectedIdx = this.selectedIdx;
+          const target = this.customOverlayList[
+            fIdx
+          ].getContent() as HTMLElement;
+          const forceEvnet = new Event("click");
+          target.dispatchEvent(forceEvnet);
+          mapCluster.$forceUpdate();
+        }
+      });
       mapCluster.$mount();
+      this.clursterComponentList.push(mapCluster);
       markerCluster.setContent(mapCluster.$el);
-      markerCluster.setZIndex(20);
     });
   }
 }
