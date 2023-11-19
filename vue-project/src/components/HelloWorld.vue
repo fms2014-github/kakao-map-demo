@@ -27,9 +27,8 @@ export default class KakaoMap extends Vue {
   clursterComponentList: any[] = [];
   prevSelectedIdx = -1;
   selectedIdx = -1;
-  apiKey = "07c20e31d1891825ce375b67602ddf31";
+  apiKey = "";
   excludeClusterIdx = -1;
-  /*07c20e31d1891825ce375b67602ddf31*/
 
   run() {
     this.kakaoMapInit();
