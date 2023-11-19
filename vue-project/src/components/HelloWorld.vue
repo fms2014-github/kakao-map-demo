@@ -1,5 +1,9 @@
 <template>
-  <div>
+  <div class="kakao-map-wrap">
+    <div class="api-key-form">
+      <input type="text" v-model="apiKey" />
+      <button @click="run()">api 키 적용</button>
+    </div>
     <div ref="kakaoMapElement" id="map"></div>
   </div>
 </template>
@@ -23,17 +27,17 @@ export default class KakaoMap extends Vue {
   clursterComponentList: any[] = [];
   prevSelectedIdx = -1;
   selectedIdx = -1;
+  apiKey = "07c20e31d1891825ce375b67602ddf31";
+  excludeClusterIdx = -1;
+  /*07c20e31d1891825ce375b67602ddf31*/
 
-  async mounted() {
-    await this.$nextTick(() => {
-      this.kakaoMapInit();
-    });
+  run() {
+    this.kakaoMapInit();
   }
 
   @Watch("searchEnd", { immediate: true })
   onSearchEnd(newVal: boolean) {
     if (newVal) {
-      console.log("awefawefaoijfasoi;djfoais");
       this.makeCustomOverlayList();
       this.customOverlayList.forEach((overlay) => {
         this.mapBounds.extend(overlay.getPosition());
@@ -48,18 +52,20 @@ export default class KakaoMap extends Vue {
 
   kakaoMapInit() {
     let script: HTMLScriptElement = document.querySelector(
-      "script[src='https://dapi.kakao.com/v2/maps/sdk.js?appkey=07c20e31d1891825ce375b67602ddf31&autoload=false&libraries=services,clusterer,drawing']"
+      `script[src='https://dapi.kakao.com/v2/maps/sdk.js?appkey=${this.apiKey}&autoload=false&libraries=services,clusterer,drawing']`
     ) as HTMLScriptElement;
 
     if (script === null) {
       script = document.createElement("script");
-      script.src =
-        "https://dapi.kakao.com/v2/maps/sdk.js?appkey=07c20e31d1891825ce375b67602ddf31&autoload=false&libraries=services,clusterer,drawing";
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${this.apiKey}&autoload=false&libraries=services,clusterer,drawing`;
       script.type = "text/javascript";
       script.onload = () => {
         window.kakao.maps.load(() => {
           this.kakaoMapLoad();
         });
+      };
+      script.onerror = () => {
+        script.remove();
       };
       const head: HTMLHeadElement = document.head;
 
@@ -102,7 +108,6 @@ export default class KakaoMap extends Vue {
             this.searchList.push(result);
             if (!pagination.hasNextPage) {
               this.searchList = this.searchList.flat();
-              console.log(this.searchList);
               this.searchEnd = true;
             }
             pagination.nextPage();
@@ -120,8 +125,6 @@ export default class KakaoMap extends Vue {
       pinComponent.$el.addEventListener("click", ($event: Event) => {
         const mcIndex = index;
         const target = $event.target as HTMLElement;
-        console.log("mcIndex", mcIndex);
-        console.log("this.selectedIdx", this.selectedIdx);
         if (this.selectedIdx !== -1 && this.selectedIdx === mcIndex) {
           target.classList.remove("act");
           this.selectedIdx = -1;
@@ -134,12 +137,19 @@ export default class KakaoMap extends Vue {
           prevTarget.classList.remove("act");
           target.classList.add("act");
           this.selectedIdx = mcIndex;
+          this.clursterComponentList.forEach((item, index) => {
+            if (this.excludeClusterIdx !== index) {
+              item.$props["openMcList"] = false;
+            }
+          });
         } else {
           target.classList.add("act");
           this.selectedIdx = mcIndex;
         }
-
-        this.clursterComponentList.forEach((item) => item.$forceUpdate());
+        this.excludeClusterIdx = -1;
+        this.clursterComponentList.forEach((item) => {
+          item.$forceUpdate();
+        });
       });
 
       const customOverlay = new window.kakao.maps.CustomOverlay({
@@ -203,7 +213,9 @@ export default class KakaoMap extends Vue {
         const fIdx = this.searchList.findIndex((item) => {
           return item.id === data;
         });
+
         if (fIdx !== -1) {
+          this.excludeClusterIdx = index;
           this.prevSelectedIdx = this.selectedIdx;
           const target = this.customOverlayList[
             fIdx
@@ -222,8 +234,14 @@ export default class KakaoMap extends Vue {
 </script>
 
 <style lang="scss" scoped>
+.api-key-form {
+  margin: 20px;
+  input[type="text"] {
+    width: 300px;
+  }
+}
 #map {
-  width: 100vw;
-  height: 100vh;
+  width: calc(100vw - 16px);
+  height: calc(100vh - 72px);
 }
 </style>
